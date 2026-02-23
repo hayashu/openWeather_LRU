@@ -1,0 +1,11 @@
+{
+  "name": "openwetherapp-LRU",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "backend"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace=backend"
+  }
+}
