@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>不明都市の確認</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { display: flex; height: 100vh; font-family: sans-serif; }
+    #map { flex: 1; }
+    #sidebar {
+      width: 280px; overflow-y: auto;
+      background: #1a1a2e; color: #eee; padding: 12px;
+    }
+    #sidebar h2 { font-size: 14px; color: #e74c3c; margin-bottom: 10px; }
+    .city-item {
+      padding: 8px 10px; margin-bottom: 4px;
+      background: #16213e; border-radius: 6px;
+      cursor: pointer; font-size: 12px;
+      border-left: 3px solid transparent;
+    }
+    .city-item:hover, .city-item.active {
+      border-left-color: #e74c3c; background: #0f3460;
+    }
+    .city-item .name { font-weight: bold; color: #fff; }
+    .city-item .coord { color: #999; font-size: 10px; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <h2>⚠ 不明都市（47件）</h2>
+    <div id="city-list"></div>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([33, 133], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    Promise.all([
+      fetch('data/japan.geojson').then(r => r.json()),
+      fetch('data/city.list.jp.grouped.json').then(r => r.json()),
+    ]).then(([geojson, grouped]) => {
+      // 都道府県ポリゴン（薄く表示）
+      L.geoJSON(geojson, {
+        style: { color: '#555', weight: 1, fillOpacity: 0.05 },
+        onEachFeature: (feature, layer) => {
+          layer.bindTooltip(feature.properties.nam_ja, { sticky: true });
+        }
+      }).addTo(map);
+
+      const unknownCities = grouped['不明'];
+      const markers = {};
+
+      unknownCities.forEach(city => {
+        const marker = L.circleMarker([city.coord.lat, city.coord.lon], {
+          radius: 8,
+          color: '#c0392b',
+          fillColor: '#e74c3c',
+          fillOpacity: 0.9,
+          weight: 2,
+        }).addTo(map);
+
+        marker.bindPopup(`
+          <b>${city.name}</b><br>
+          id: ${city.id}<br>
+          lat: ${city.coord.lat}<br>
+          lon: ${city.coord.lon}
+        `);
+
+        markers[city.id] = marker;
+
+        // サイドバーのリスト
+        const item = document.createElement('div');
+        item.className = 'city-item';
+        item.innerHTML = `
+          <div class="name">${city.name}</div>
+          <div class="coord">${city.coord.lat}, ${city.coord.lon}</div>
+        `;
+        item.addEventListener('click', () => {
+          document.querySelectorAll('.city-item').forEach(el => el.classList.remove('active'));
+          item.classList.add('active');
+          map.setView([city.coord.lat, city.coord.lon], 9);
+          marker.openPopup();
+        });
+        document.getElementById('city-list').appendChild(item);
+      });
+    });
+  </script>
+</body>
+</html>

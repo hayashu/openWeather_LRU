@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Point-in-Polygon 可視化</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; }
+    #map { height: 100vh; }
+    #info {
+      position: absolute; top: 10px; right: 10px; z-index: 1000;
+      background: white; padding: 12px 16px; border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2); min-width: 200px;
+    }
+    #info h3 { font-size: 13px; color: #666; margin-bottom: 6px; }
+    #city-name { font-size: 16px; font-weight: bold; }
+    #pref-name { font-size: 14px; color: #e74c3c; margin-top: 4px; }
+    #coords { font-size: 11px; color: #999; margin-top: 4px; }
+    #legend {
+      position: absolute; bottom: 30px; left: 10px; z-index: 1000;
+      background: white; padding: 10px 14px; border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2); font-size: 12px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="info">
+    <h3>都市をクリックして確認</h3>
+    <div id="city-name">-</div>
+    <div id="pref-name"></div>
+    <div id="coords"></div>
+  </div>
+  <div id="legend">
+    <b>凡例</b>
+    <div class="legend-item"><div class="dot" style="background:#3498db"></div> 都市（分類済み）</div>
+    <div class="legend-item"><div class="dot" style="background:#e74c3c"></div> 都市（不明）</div>
+    <div class="legend-item"><div class="dot" style="background:#2ecc71; width:30px; border-radius:2px;"></div> クリックした県</div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([36.5, 137.5], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // 都道府県ごとの色（47色）
+    const PREF_COLORS = [
+      '#e8f4f8','#fef9e7','#eafaf1','#fdedec','#f4ecf7',
+      '#e8f8f5','#fdf2e9','#eaf2fb','#fdfefe','#f9f3e3',
+    ];
+    function getPrefColor(id) {
+      return PREF_COLORS[id % PREF_COLORS.length];
+    }
+
+    let prefLayers = {};       // 県名 → Leaflet レイヤー
+    let activePrefLayer = null;
+
+    // GeoJSON（都道府県ポリゴン）を読み込む
+    fetch('data/japan.geojson')
+      .then(r => r.json())
+      .then(geojson => {
+        L.geoJSON(geojson, {
+          style: feature => ({
+            color: '#555',
+            weight: 1,
+            fillColor: getPrefColor(feature.properties.id),
+            fillOpacity: 0.3,
+          }),
+          onEachFeature: (feature, layer) => {
+            prefLayers[feature.properties.nam_ja] = layer;
+            layer.bindTooltip(feature.properties.nam_ja, { sticky: true });
+          }
+        }).addTo(map);
+
+        // 都市データを読み込む
+        return fetch('data/city.list.jp.grouped.json').then(r => r.json());
+      })
+      .then(grouped => {
+        // 都市マーカーを描画
+        Object.entries(grouped).forEach(([pref, cities]) => {
+          const isUnknown = pref === '不明';
+          cities.forEach(city => {
+            const marker = L.circleMarker([city.coord.lat, city.coord.lon], {
+              radius: 5,
+              color: isUnknown ? '#e74c3c' : '#2980b9',
+              fillColor: isUnknown ? '#e74c3c' : '#3498db',
+              fillOpacity: 0.8,
+              weight: 1,
+            }).addTo(map);
+
+            // クリックで県ポリゴンをハイライト
+            marker.on('click', () => {
+              // 前の選択を解除
+              if (activePrefLayer) {
+                activePrefLayer.setStyle({ fillColor: getPrefColor(0), fillOpacity: 0.3, weight: 1 });
+              }
+              // 該当県をハイライト
+              const layer = prefLayers[pref];
+              if (layer) {
+                layer.setStyle({ fillColor: '#2ecc71', fillOpacity: 0.6, weight: 3 });
+                activePrefLayer = layer;
+              }
+              // 情報パネルを更新
+              document.getElementById('city-name').textContent = city.name;
+              document.getElementById('pref-name').textContent =
+                isUnknown ? '⚠ どの県にも属さない（不明）' : `✅ ${pref}`;
+              document.getElementById('coords').textContent =
+                `lat: ${city.coord.lat}, lon: ${city.coord.lon}`;
+            });
+          });
+        });
+      })
+      .catch(err => alert('ファイル読み込みエラー: ' + err.message + '\n\nscripts/ フォルダで npx serve を実行してください'));
+  </script>
+</body>
+</html>

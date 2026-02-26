@@ -34,3 +34,7 @@ drizzle/
 .vscode/
 *.swp
 *.swo
+
+# 大容量データ
+scripts/data/japan.geojson
+scripts/data/.checkpoint.json
